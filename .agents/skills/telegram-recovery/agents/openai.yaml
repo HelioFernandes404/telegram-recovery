@@ -1,0 +1,4 @@
+interface:
+  display_name: "Telegram Recovery"
+  short_description: "Backup local de canais com retomada e auditoria"
+  default_prompt: "Use $telegram-recovery para operar o backup autorizado deste projeto, respeitando o canal, o escopo e a sessão local existentes."

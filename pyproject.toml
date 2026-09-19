@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "telegram-recovery"
+version = "0.1.0"
+description = "Inventário local de vídeos de canais autorizados do Telegram"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["Telethon>=1.45,<2", "python-dotenv>=1.1,<2"]
+
+[project.scripts]
+telegram-recovery = "telegram_recovery.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3,<10", "ruff>=0.11,<1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

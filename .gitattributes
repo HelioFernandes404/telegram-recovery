@@ -1,0 +1,9 @@
+* text=auto eol=lf
+*.py text diff=python
+*.md text
+*.json text
+*.jsonl text
+*.sqlite3 binary
+*.db binary
+*.mp4 binary
+*.session binary
