@@ -1,4 +1,4 @@
-"""Explicit, terminal-only user login. Secrets are never printed or accepted as CLI flags."""
+"""Explicit local user login. Secrets are never printed or accepted as CLI flags."""
 
 import asyncio
 import getpass
@@ -74,6 +74,72 @@ def valid_api_id(value):
 
 def valid_api_hash(value):
     return bool(re.fullmatch(r"[0-9a-fA-F]{32}", value))
+
+
+def configure_credentials_values(root: Path, values: dict[str, str]):
+    """Persist missing API credentials supplied by a trusted local UI.
+
+    Existing values and environment overrides keep precedence. The caller must
+    never pass these values to logs, URLs, or user-facing error messages.
+    """
+    if any(key in os.environ for key in API_KEYS):
+        raise RecoveryError(
+            "Configuração do ambiente incompleta/inválida. Corrija as variáveis locais "
+            "ou remova seus overrides antes de usar a autenticação web.",
+            code="credentials_invalid",
+        )
+
+    env_path = root / ".env"
+    private_file(env_path)
+    source = env_path.read_bytes().decode("utf-8") if env_path.exists() else ""
+    existing = dotenv_values(env_path, interpolate=False) if env_path.exists() else {}
+    validators = dict(zip(API_KEYS, (valid_api_id, valid_api_hash), strict=True))
+    additions = {}
+    for key in API_KEYS:
+        current = existing.get(key)
+        if current:
+            if not validators[key](current):
+                raise RecoveryError(
+                    "Há uma credencial preenchida, mas inválida, no .env. Corrija-a no "
+                    "editor local; "
+                    "o arquivo foi preservado.",
+                    code="credentials_invalid",
+                )
+            continue
+        raw_candidate = values.get(key)
+        candidate = raw_candidate.strip() if isinstance(raw_candidate, str) else ""
+        if not validators[key](candidate):
+            raise RecoveryError(
+                "Informe um API ID e um API hash válidos para continuar.",
+                code="credentials_invalid",
+            )
+        additions[key] = candidate
+
+    if additions:
+        updated = source + ("\n" if source and not source.endswith("\n") else "")
+        updated += "# Credenciais configuradas localmente por telegram-recovery auth.\n"
+        updated += "".join(f"{key}={value}\n" for key, value in additions.items())
+        fd, temp_name = tempfile.mkstemp(prefix=".env.auth-web-", dir=root)
+        temp_path = Path(temp_name)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                os.fchmod(stream.fileno(), 0o600)
+                stream.write(updated)
+                stream.flush()
+                os.fsync(stream.fileno())
+            private_file(env_path)
+            current = env_path.read_bytes().decode("utf-8") if env_path.exists() else ""
+            if current != source:
+                raise RecoveryError(
+                    ".env foi alterado durante a configuração. Alterações preservadas; "
+                    "repita a autenticação.",
+                    code="auth_config_changed",
+                )
+            os.replace(temp_path, env_path)
+        finally:
+            temp_path.unlink(missing_ok=True)
+
+    return telegram_client.load_credentials(root)
 
 
 def configure_credentials(root: Path):
