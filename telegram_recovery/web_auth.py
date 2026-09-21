@@ -35,7 +35,7 @@ COOKIE_NAME = "telegram_recovery_web"
 MAX_BODY_BYTES = 16 * 1024
 
 
-PAGE = r'''<!doctype html>
+PAGE = r"""<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
@@ -438,7 +438,7 @@ PAGE = r'''<!doctype html>
       load();
     </script>
   </body>
-</html>'''
+</html>"""
 
 
 def _normalize_phone(value: str) -> str:
@@ -471,7 +471,9 @@ class AuthFlow:
         }
         self._loop: asyncio.AbstractEventLoop | None = None
         self._loop_ready = threading.Event()
-        self._thread = threading.Thread(target=self._run_loop, name="telegram-recovery-auth", daemon=True)
+        self._thread = threading.Thread(
+            target=self._run_loop, name="telegram-recovery-auth", daemon=True
+        )
         self._flow_task: asyncio.Task | None = None
         self._phase_ready: asyncio.Future | None = None
         self._code_future: asyncio.Future | None = None
@@ -479,7 +481,9 @@ class AuthFlow:
         self._closed = False
         self._thread.start()
         if not self._loop_ready.wait(5):
-            raise RecoveryError("Não foi possível iniciar o motor do login local.", code="auth_web_unavailable")
+            raise RecoveryError(
+                "Não foi possível iniciar o motor do login local.", code="auth_web_unavailable"
+            )
 
     def _has_credentials(self) -> bool:
         try:
@@ -513,7 +517,9 @@ class AuthFlow:
             return future.result(timeout)
         except TimeoutError:
             future.cancel()
-            raise RecoveryError("O login local demorou demais e foi cancelado.", code="auth_network") from None
+            raise RecoveryError(
+                "O login local demorou demais e foi cancelado.", code="auth_network"
+            ) from None
 
     def status(self) -> dict:
         with self._state_lock:
@@ -540,7 +546,9 @@ class AuthFlow:
 
     async def _begin(self, phone: str, values: dict[str, str]):
         if self._flow_task is not None and not self._flow_task.done():
-            raise RecoveryError("Já existe uma autenticação em andamento nesta janela.", code="auth_web_busy")
+            raise RecoveryError(
+                "Já existe uma autenticação em andamento nesta janela.", code="auth_web_busy"
+            )
         self._phase_ready = self._loop.create_future()
         self._flow_task = self._loop.create_task(self._flow(phone, values))
         self._flow_task.add_done_callback(self._consume_task_exception)
@@ -554,8 +562,13 @@ class AuthFlow:
     def begin(self, phone: str, *, api_id: str = "", api_hash: str = ""):
         normalized = _normalize_phone(phone or "")
         if not _valid_phone(normalized):
-            raise RecoveryError("Informe um telefone internacional válido, como +5511999999999.", code="auth_phone_invalid")
-        return self._call(lambda: self._begin(normalized, {API_KEYS[0]: api_id, API_KEYS[1]: api_hash}))
+            raise RecoveryError(
+                "Informe um telefone internacional válido, como +5511999999999.",
+                code="auth_phone_invalid",
+            )
+        return self._call(
+            lambda: self._begin(normalized, {API_KEYS[0]: api_id, API_KEYS[1]: api_hash})
+        )
 
     async def _flow(self, phone: str, values: dict[str, str]):
         configure = bool(values.get(API_KEYS[0]) or values.get(API_KEYS[1]))
@@ -581,12 +594,18 @@ class AuthFlow:
                     client = telegram_client.create_client(session_path, credentials)
                     await auth_request(client.connect, "connect")
                     run.emit("auth_step", stage="connected")
-                    self._publish("connecting", title="Conectando ao Telegram", message="Verificando se já existe uma sessão autorizada…")
+                    self._publish(
+                        "connecting",
+                        title="Conectando ao Telegram",
+                        message="Verificando se já existe uma sessão autorizada…",
+                    )
                     authorized = await auth_request(client.is_user_authorized, "authorization")
                     if authorized:
                         user = await auth_request(client.get_me, "user")
                     else:
-                        sent = await auth_request(lambda: client.send_code_request(phone), "auth_send_code")
+                        sent = await auth_request(
+                            lambda: client.send_code_request(phone), "auth_send_code"
+                        )
                         code_hash = getattr(sent, "phone_code_hash", None)
                         if not code_hash:
                             raise RecoveryError(
@@ -597,22 +616,40 @@ class AuthFlow:
                         user = await self._login_with_code(client, phone, code_hash)
                     if user is None or getattr(user, "bot", False):
                         raise RecoveryError(
-                            "É necessária uma sessão de conta de usuário, não de bot.", code="bot_session"
+                            "É necessária uma sessão de conta de usuário, não de bot.",
+                            code="bot_session",
                         )
-                    run.emit("auth_step", stage="already_authorized" if authorized else "authorized")
-                    self._publish("success", title="Conta conectada", message="Sessão de usuário autenticada e salva localmente.")
+                    run.emit(
+                        "auth_step", stage="already_authorized" if authorized else "authorized"
+                    )
+                    self._publish(
+                        "success",
+                        title="Conta conectada",
+                        message="Sessão de usuário autenticada e salva localmente.",
+                    )
         except asyncio.CancelledError:
-            self._publish("cancelled", title="Login cancelado", message="A autenticação foi cancelada. Nenhum segredo foi gravado nos logs.")
+            self._publish(
+                "cancelled",
+                title="Login cancelado",
+                message="A autenticação foi cancelada. Nenhum segredo foi gravado nos logs.",
+            )
             raise
         except RecoveryError as exc:
-            self._publish("error", title="Não foi possível concluir", message=str(exc), error_code=exc.code)
+            self._publish(
+                "error", title="Não foi possível concluir", message=str(exc), error_code=exc.code
+            )
             raise
         except Exception:
             error = RecoveryError(
                 "Falha na autenticação. Confira a configuração, a conexão e tente novamente.",
                 code="unexpected",
             )
-            self._publish("error", title="Não foi possível concluir", message=str(error), error_code=error.code)
+            self._publish(
+                "error",
+                title="Não foi possível concluir",
+                message=str(error),
+                error_code=error.code,
+            )
             raise error from None
         finally:
             if client is not None:
@@ -626,13 +663,22 @@ class AuthFlow:
 
     async def _login_with_code(self, client, phone: str, code_hash: str):
         self._code_future = self._loop.create_future()
-        self._publish("code", title="Código enviado", message="Confira o Telegram e digite o código recebido.")
+        self._publish(
+            "code", title="Código enviado", message="Confira o Telegram e digite o código recebido."
+        )
         for attempt in range(ATTEMPTS):
             code = await self._code_future
-            self._publish("checking", title="Validando código", message="Aguarde um instante…", attempts=attempt + 1)
+            self._publish(
+                "checking",
+                title="Validando código",
+                message="Aguarde um instante…",
+                attempts=attempt + 1,
+            )
             try:
                 return await auth_request(
-                    lambda code=code: client.sign_in(phone=phone, code=code, phone_code_hash=code_hash),
+                    lambda code=code: client.sign_in(
+                        phone=phone, code=code, phone_code_hash=code_hash
+                    ),
                     "auth_sign_in",
                 )
             except errors.SessionPasswordNeededError:
@@ -651,21 +697,36 @@ class AuthFlow:
                     attempts=attempt_number,
                     error_code="auth_code_invalid",
                 )
-        raise RecoveryError("Limite de tentativas de código atingido.", code="auth_attempts_exhausted")
+        raise RecoveryError(
+            "Limite de tentativas de código atingido.", code="auth_attempts_exhausted"
+        )
 
     async def _login_with_password(self, client):
         for attempt in range(ATTEMPTS):
             self._password_future = self._loop.create_future()
-            self._publish("password", title="Senha 2FA necessária", message="Sua conta usa verificação em duas etapas.", attempts=attempt)
+            self._publish(
+                "password",
+                title="Senha 2FA necessária",
+                message="Sua conta usa verificação em duas etapas.",
+                attempts=attempt,
+            )
             password = await self._password_future
-            self._publish("checking", title="Validando senha 2FA", message="Aguarde um instante…", attempts=attempt + 1)
+            self._publish(
+                "checking",
+                title="Validando senha 2FA",
+                message="Aguarde um instante…",
+                attempts=attempt + 1,
+            )
             try:
-                return await auth_request(lambda password=password: client.sign_in(password=password), "auth_password")
+                return await auth_request(
+                    lambda password=password: client.sign_in(password=password), "auth_password"
+                )
             except errors.PasswordHashInvalidError:
                 attempt_number = attempt + 1
                 if attempt_number >= ATTEMPTS:
                     raise RecoveryError(
-                        "Limite de tentativas de senha 2FA atingido.", code="auth_attempts_exhausted"
+                        "Limite de tentativas de senha 2FA atingido.",
+                        code="auth_attempts_exhausted",
                     ) from None
                 self._publish(
                     "password",
@@ -674,14 +735,20 @@ class AuthFlow:
                     attempts=attempt_number,
                     error_code="auth_password_invalid",
                 )
-        raise RecoveryError("Limite de tentativas de senha 2FA atingido.", code="auth_attempts_exhausted")
+        raise RecoveryError(
+            "Limite de tentativas de senha 2FA atingido.", code="auth_attempts_exhausted"
+        )
 
     async def _submit_code(self, code: str):
         code = code.strip() if isinstance(code, str) else ""
         if not re.fullmatch(r"[0-9]{4,10}", code):
-            raise RecoveryError("Informe somente os dígitos do código recebido.", code="auth_code_invalid")
+            raise RecoveryError(
+                "Informe somente os dígitos do código recebido.", code="auth_code_invalid"
+            )
         if self._state["phase"] != "code" or self._code_future is None or self._code_future.done():
-            raise RecoveryError("Esta etapa do login não está mais disponível.", code="auth_web_state")
+            raise RecoveryError(
+                "Esta etapa do login não está mais disponível.", code="auth_web_state"
+            )
         self._code_future.set_result(code)
         await asyncio.sleep(0)
         return self.status()
@@ -692,8 +759,14 @@ class AuthFlow:
     async def _submit_password(self, password: str):
         if not isinstance(password, str) or not password:
             raise RecoveryError("Informe a senha 2FA para continuar.", code="auth_password_invalid")
-        if self._state["phase"] != "password" or self._password_future is None or self._password_future.done():
-            raise RecoveryError("Esta etapa do login não está mais disponível.", code="auth_web_state")
+        if (
+            self._state["phase"] != "password"
+            or self._password_future is None
+            or self._password_future.done()
+        ):
+            raise RecoveryError(
+                "Esta etapa do login não está mais disponível.", code="auth_web_state"
+            )
         self._password_future.set_result(password)
         await asyncio.sleep(0)
         return self.status()
@@ -705,7 +778,11 @@ class AuthFlow:
         if self._flow_task is not None and not self._flow_task.done():
             self._flow_task.cancel()
             await asyncio.gather(self._flow_task, return_exceptions=True)
-        self._publish("cancelled", title="Login cancelado", message="A autenticação foi cancelada. Você pode começar novamente.")
+        self._publish(
+            "cancelled",
+            title="Login cancelado",
+            message="A autenticação foi cancelada. Você pode começar novamente.",
+        )
         return self.status()
 
     def cancel(self):
@@ -746,7 +823,10 @@ class AuthWebHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Content-Security-Policy", "default-src 'self'; connect-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; connect-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'",
+        )
 
     def _send_json(self, payload: dict, status=HTTPStatus.OK):
         raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -760,7 +840,10 @@ class AuthWebHandler(BaseHTTPRequestHandler):
         raw = PAGE.encode("utf-8")
         self.send_response(HTTPStatus.OK)
         self._headers("text/html; charset=utf-8")
-        self.send_header("Set-Cookie", f"{COOKIE_NAME}={self.server.cookie_value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=3600")
+        self.send_header(
+            "Set-Cookie",
+            f"{COOKIE_NAME}={self.server.cookie_value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=3600",
+        )
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
@@ -768,7 +851,10 @@ class AuthWebHandler(BaseHTTPRequestHandler):
     def _authorized(self) -> bool:
         cookie = SimpleCookie()
         cookie.load(self.headers.get("Cookie", ""))
-        return secrets.compare_digest(cookie.get(COOKIE_NAME, {}).value if cookie.get(COOKIE_NAME) else "", self.server.cookie_value)
+        return secrets.compare_digest(
+            cookie.get(COOKIE_NAME, {}).value if cookie.get(COOKIE_NAME) else "",
+            self.server.cookie_value,
+        )
 
     def _require_json(self) -> dict:
         try:
@@ -792,15 +878,34 @@ class AuthWebHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/auth/status":
             if not self._authorized():
-                self._send_json({"error": {"code": "auth_web_session", "message": "Abra o painel local novamente."}}, HTTPStatus.FORBIDDEN)
+                self._send_json(
+                    {
+                        "error": {
+                            "code": "auth_web_session",
+                            "message": "Abra o painel local novamente.",
+                        }
+                    },
+                    HTTPStatus.FORBIDDEN,
+                )
                 return
             self._send_json({"state": self.server.flow.status()})
             return
-        self._send_json({"error": {"code": "not_found", "message": "Rota não encontrada."}}, HTTPStatus.NOT_FOUND)
+        self._send_json(
+            {"error": {"code": "not_found", "message": "Rota não encontrada."}},
+            HTTPStatus.NOT_FOUND,
+        )
 
     def do_POST(self):
         if not self._authorized():
-            self._send_json({"error": {"code": "auth_web_session", "message": "Sessão do painel local inválida."}}, HTTPStatus.FORBIDDEN)
+            self._send_json(
+                {
+                    "error": {
+                        "code": "auth_web_session",
+                        "message": "Sessão do painel local inválida.",
+                    }
+                },
+                HTTPStatus.FORBIDDEN,
+            )
             return
         try:
             data = self._require_json()
@@ -818,14 +923,24 @@ class AuthWebHandler(BaseHTTPRequestHandler):
             elif path == "/api/auth/cancel":
                 state = self.server.flow.cancel()
             else:
-                self._send_json({"error": {"code": "not_found", "message": "Rota não encontrada."}}, HTTPStatus.NOT_FOUND)
+                self._send_json(
+                    {"error": {"code": "not_found", "message": "Rota não encontrada."}},
+                    HTTPStatus.NOT_FOUND,
+                )
                 return
             self._send_json({"state": state})
         except RecoveryError as exc:
-            self._send_json({"error": {"code": exc.code, "message": str(exc)}}, HTTPStatus.BAD_REQUEST)
+            self._send_json(
+                {"error": {"code": exc.code, "message": str(exc)}}, HTTPStatus.BAD_REQUEST
+            )
         except Exception:
             self._send_json(
-                {"error": {"code": "auth_web_request", "message": "Não foi possível concluir esta etapa."}},
+                {
+                    "error": {
+                        "code": "auth_web_request",
+                        "message": "Não foi possível concluir esta etapa.",
+                    }
+                },
                 HTTPStatus.INTERNAL_SERVER_ERROR,
             )
 

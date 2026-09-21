@@ -24,6 +24,15 @@ def wait_for_phase(flow, phase, timeout=2):
     pytest.fail(f"phase did not become {phase!r}: {flow.status()!r}")
 
 
+def wait_for_await(mock, timeout=2):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if mock.await_count:
+            return
+        time.sleep(0.01)
+    pytest.fail("mock was not awaited before timeout")
+
+
 @pytest.fixture
 def configured_root(tmp_path):
     (tmp_path / ".env").write_text(f"TELEGRAM_API_ID=9999\nTELEGRAM_API_HASH={API_HASH}\n")
@@ -38,7 +47,9 @@ def fake_client(monkeypatch):
         disconnect=AsyncMock(),
         is_user_authorized=AsyncMock(return_value=False),
         get_me=AsyncMock(return_value=user),
-        send_code_request=AsyncMock(return_value=SimpleNamespace(phone_code_hash="PRIVATE_CODE_HASH")),
+        send_code_request=AsyncMock(
+            return_value=SimpleNamespace(phone_code_hash="PRIVATE_CODE_HASH")
+        ),
         sign_in=AsyncMock(return_value=user),
     )
     monkeypatch.setattr(telegram_client, "create_client", Mock(return_value=client))
@@ -65,6 +76,7 @@ def test_web_flow_completes_code_login_without_secret_output(configured_root, fa
         fake_client.sign_in.assert_awaited_once_with(
             phone=PHONE, code=CODE, phone_code_hash="PRIVATE_CODE_HASH"
         )
+        wait_for_await(fake_client.disconnect)
         fake_client.disconnect.assert_awaited_once()
         session = configured_root / "sessions/telegram-recovery.session"
         assert session.exists()
@@ -76,9 +88,7 @@ def test_web_flow_completes_code_login_without_secret_output(configured_root, fa
         flow.close()
 
 
-def test_web_flow_guides_two_factor_without_trimming_password(
-    configured_root, fake_client
-):
+def test_web_flow_guides_two_factor_without_trimming_password(configured_root, fake_client):
     user = fake_client.get_me.return_value
     fake_client.sign_in.side_effect = [errors.SessionPasswordNeededError(None), user]
     flow = AuthFlow(configured_root)
