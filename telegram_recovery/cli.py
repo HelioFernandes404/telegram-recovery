@@ -18,6 +18,7 @@ from .module_check import check_modules
 from .run_logging import ACTIVE_RUN, RunLog
 from .security import RecoveryError, exclusive_lock
 from .telegram_client import channel_number, existing_user_session, resolve_channel
+from .web_auth import WEB_PORT, serve_auth_web
 
 
 def positive_int(value: str) -> int:
@@ -95,6 +96,17 @@ def parser() -> argparse.ArgumentParser:
         "--configure",
         action="store_true",
         help="Preencher campos ausentes do .env com entrada oculta; preserva valores existentes.",
+    )
+    auth.add_argument(
+        "--web",
+        action="store_true",
+        help="Abrir o assistente de login local no navegador, limitado a 127.0.0.1.",
+    )
+    auth.add_argument(
+        "--port",
+        type=int,
+        default=WEB_PORT,
+        help=f"Porta do assistente web (padrão: {WEB_PORT}).",
     )
     download = commands.add_parser(
         "download", parents=[common], help="Baixar vídeos por curso/módulo, com retomada."
@@ -251,6 +263,15 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         if args.command == "auth":
+            if args.web:
+                if args.configure:
+                    raise RecoveryError(
+                        "Use os campos de configuração do assistente web; --configure é exclusivo "
+                        "do terminal.",
+                        code="auth_web_options",
+                    )
+                serve_auth_web(args.root.absolute(), port=args.port)
+                return 0
             require_terminal()
             with RunLog(args.root.absolute(), command="auth") as run:
                 run.start_auth(configure=args.configure)

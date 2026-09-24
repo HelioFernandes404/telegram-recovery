@@ -9,7 +9,7 @@ Esta versão inclui **inventário, autenticação local e download por curso/mó
 | `inventory` | Funcional, exige uma sessão de usuário previamente autenticada |
 | `status` | Funcional, resumo do SQLite, sem rede |
 | `report` | Funcional, registros em JSON Lines, sem rede |
-| `auth` | Funcional, login explícito de usuário somente em terminal local, com código e 2FA |
+| `auth` | Funcional, login explícito de usuário no terminal ou em wizard web local, com código e 2FA |
 | `download` | Funcional; seleção local por curso/módulo/tag/mensagem, `.part`, SHA-256 e `--dry-run` |
 | `verify` | Reservado; retorna código 2, sem executar ffprobe |
 
@@ -144,7 +144,19 @@ Códigos e senhas incorretos permitem até três tentativas de envio ao Telegram
 
 Há uma exceção para o redirecionamento explícito de servidor (erro 303: `PHONE_MIGRATE`, `NETWORK_MIGRATE` ou `USER_MIGRATE`): o Telethon muda de servidor e a aplicação permite repetir a operação rejeitada uma vez. Isso segue a [orientação oficial de redirecionamento do Telegram](https://core.telegram.org/api/errors#303-see-other), sem repetir entregas de resultado incerto. O evento `auth_dc_redirect` registra essa etapa sem identificar a conta. Redirecionamentos repetidos encerram com `auth_dc_migration`. Erros do provedor são preservados por tipo antes da sanitização, evitando que a biblioteca transforme esses casos em um `ValueError` genérico. `value_error`, `runtime_error` e `type_error` registram categorias locais, nunca o texto bruto da exceção.
 
-O log `auth-*.jsonl` registra somente etapas e códigos de diagnóstico: `auth_started`, `auth_prompt` (tipo do campo, nunca o valor), `auth_request`, `auth_retry`, `auth_step` e `run_finished`. Não registra identidade da conta, resposta bruta do Telegram, telefone, código, senha, hash ou arquivo de sessão. A entrada visível do telefone é exclusiva do terminal local. O comando não lê o histórico do canal nem inicia downloads.
+O log `auth-*.jsonl` registra somente etapas e códigos de diagnóstico: `auth_started`, `auth_prompt` (tipo do campo, nunca o valor), `auth_request`, `auth_retry`, `auth_step` e `run_finished`. Não registra identidade da conta, resposta bruta do Telegram, telefone, código, senha, hash ou arquivo de sessão. O telefone do modo terminal aparece apenas na tela local, nunca nos logs. O comando não lê o histórico do canal nem inicia downloads.
+
+## Login guiado no navegador local
+
+Para conduzir a autenticação por uma interface passo a passo, execute na raiz do projeto:
+
+```bash
+uv run --no-sync telegram-recovery auth --web
+```
+
+Abra a URL exibida no terminal, normalmente `http://127.0.0.1:8766`. O servidor aceita conexões somente de loopback, usa um cookie de sessão temporário e mantém o cliente Telethon no processo local. A interface orienta a configuração do API ID/API hash, telefone, código e senha 2FA; não grava segredos no navegador, na URL ou nos logs. O botão de cancelamento encerra a sessão e libera a trava local.
+
+O login pelo terminal continua disponível com `auth` e `auth --configure`. Não execute o wizard web em uma porta exposta à rede nem compartilhe a URL durante uma autenticação.
 
 Diagnósticos adicionais: `auth_terminal_required` (terminal sem suporte), `auth_input_closed` (entrada encerrada), `auth_config_changed` (edição concorrente), `auth_attempts_exhausted` (tentativas esgotadas), `auth_code_expired` (código expirado), `auth_flood_wait` (esperar o prazo informado), `auth_network` (conexão incerta), `auth_phone_invalid` (telefone recusado), `auth_account_missing` (conta não cadastrada) e `auth_flow_unsupported` (fluxo de login diferente do implementado).
 

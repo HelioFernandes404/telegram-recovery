@@ -18,8 +18,9 @@ Não recrie um downloader nem trate números de exemplos como alvos autorizados.
   somente leitura: sem enviar, encaminhar, editar, apagar mensagens ou fazer upload.
   Não use Bot API nem Telegram Web para transferências.
 - Reutilize a sessão local autorizada. `auth` exige pedido explícito e entrada do
-  usuário no terminal local. Nunca peça telefone, código, senha 2FA, API hash ou
-  arquivo de sessão na conversa. Não capture entradas do login por ferramentas.
+  usuário em terminal local ou no wizard web limitado a `127.0.0.1`. Nunca peça
+  telefone, código, senha 2FA, API hash ou arquivo de sessão na conversa. Não
+  capture entradas do login por ferramentas.
 - Não imprima `.env`, ambiente completo, conteúdo de `.session`, objetos do cliente
   ou exceções brutas do provedor. Use códigos sanitizados de `run_logging.py`.
   `.env`, sessões, SQLite, legendas, vídeos e logs são dados privados locais.
